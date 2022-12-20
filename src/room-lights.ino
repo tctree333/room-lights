@@ -1,6 +1,7 @@
 #include "Particle.h"
 #include "neopixel.h"
 #include "WebDuino.h"
+#include "math.h"
 
 SYSTEM_THREAD(ENABLED)
 
@@ -14,28 +15,51 @@ SYSTEM_THREAD(ENABLED)
 Adafruit_NeoPixel strip(PIXEL_COUNT, PIXEL_PIN, PIXEL_TYPE);
 
 WebServer webserver("", 80);
-String status = "rainbow";
 
-uint16_t j = 255;
+uint8_t r = 0, g = 255, b = 255, brightness = 64;
+String mode = "rainbow";
+
+uint8_t rainbowJ = 255;
 Timer rainbow_timer(300, rainbow);
 void rainbow()
 {
   for (uint16_t i = 0; i < strip.numPixels(); i++)
   {
-    strip.setPixelColor(i, Wheel((i + j) & 255));
+    strip.setPixelColor(i, Wheel((i + rainbowJ) & 255));
   }
   strip.show();
-  j--;
-  if (j < 0)
-    j = 255;
+  rainbowJ--; // rely on underflow to wrap back around
 }
 
 Timer random_timer(700, random_lights);
 void random_lights()
 {
+
   strip.setPixelColor(random(strip.numPixels() - 1), random(255), random(255), random(255));
+
   strip.show();
   random_timer.changePeriod(random(800) + 200);
+}
+
+Timer random_around_timer(300, random_around);
+void random_around()
+{
+  strip.setPixelColor(random(strip.numPixels() - 1), g ^ random(64), r ^ random(64), b ^ random(64));
+  strip.show();
+  random_around_timer.changePeriod(random(500) + 200);
+}
+
+void color(uint8_t r, uint8_t g, uint8_t b)
+{
+  rainbow_timer.stop();
+  random_timer.stop();
+  random_around_timer.stop();
+
+  for (uint16_t i = 0; i < strip.numPixels(); i++)
+  {
+    strip.setPixelColor(i, g, r, b);
+  }
+  strip.show();
 }
 
 // Input a value 0 to 255 to get a color value.
@@ -58,66 +82,77 @@ uint32_t Wheel(byte WheelPos)
   }
 }
 
-uint8_t r = 0, g = 255, b = 255;
-void color(uint8_t r, uint8_t g, uint8_t b)
-{
-  rainbow_timer.stop();
-  random_timer.stop();
-
-  for (uint16_t i = 0; i < strip.numPixels(); i++)
-  {
-    strip.setPixelColor(i, g, r, b);
-  }
-  strip.show();
-}
-
-String setLights(String data)
+void setLights(String data)
 {
   if (data == "on")
   {
-    setLights(status);
+    setLights(mode);
   }
-
-  if (data == "off")
+  else if (data == "off")
   {
     color(0, 0, 0);
   }
-
-  if (data.length() == 3 && data[0] == 66)
-  { // compare to "B"
-    data.remove(0, 1);
-
-    uint32_t number = strtol(data, NULL, 16);
-
-    strip.setBrightness(number);
-    strip.show();
-  }
-
-  if (data == "rainbow")
+  else if (data == "rainbow")
   {
+    mode = "rainbow";
+
     random_timer.stop();
+    random_around_timer.stop();
     if (!rainbow_timer.isActive())
     {
       rainbow_timer.start();
     }
   }
-  else if (data == "random")
+  else if (data == "pureRandom")
   {
+    mode = "pureRandom";
+
     rainbow_timer.stop();
-
-    for (uint16_t i = 0; i < strip.numPixels(); i++)
-    {
-      strip.setPixelColor(i, random(255), random(255), random(255));
-    }
-    strip.show();
-
+    random_around_timer.stop();
     if (!random_timer.isActive())
     {
+      for (uint16_t i = 0; i < strip.numPixels(); i++)
+      {
+        strip.setPixelColor(i, random(255), random(255), random(255));
+      }
+      strip.show();
       random_timer.start();
     }
   }
-  else if (data.length() == 7 && data[0] == 36)
-  { // compare to "$"
+  else if (data == "randomAround")
+  {
+    mode = "randomAround";
+
+    rainbow_timer.stop();
+    random_timer.stop();
+    if (!random_around_timer.isActive())
+    {
+      for (uint16_t i = 0; i < strip.numPixels(); i++)
+      {
+        strip.setPixelColor(i, g ^ random(64), r ^ random(64), b ^ random(64));
+      }
+      strip.show();
+      random_around_timer.start();
+    }
+  }
+  else if (data == "manual")
+  {
+    mode = "manual";
+
+    color(r, g, b);
+  }
+  else if (data.length() == 3 && data[0] == 66) // compare to "B"
+  {
+    data.remove(0, 1);
+
+    uint32_t number = strtol(data, NULL, 16);
+    brightness = number & 0xFF;
+
+    strip.setBrightness(brightness);
+    strip.show();
+  }
+  else if (data.length() == 7 && data[0] == 36) // compare to "$"
+  {
     data.remove(0, 1);
 
     uint32_t number = strtol(data, NULL, 16);
@@ -127,16 +162,8 @@ String setLights(String data)
     g = number >> 8 & 0xFF;
     b = number & 0xFF;
 
-    color(r, g, b);
-
     data = "$" + data;
   }
-  else
-  {
-    return status;
-  }
-
-  return data;
 }
 void command(WebServer &server, WebServer::ConnectionType type, char *tail, bool tail_complete)
 {
@@ -145,17 +172,25 @@ void command(WebServer &server, WebServer::ConnectionType type, char *tail, bool
   if (type == WebServer::HEAD)
     return;
 
-  status = setLights(String(tail));
+  setLights(String(tail));
 
-  server.printP(status);
+  server.printP("ok");
 }
 
 void statusCommand(WebServer &server, WebServer::ConnectionType type, char *, bool)
 {
-  server.httpSuccess("text/plain");
+  server.httpSuccess("application/json");
 
   if (type == WebServer::HEAD)
     return;
+
+  String status = "{\"color\": " +
+                  String(r << 16 | g << 8 | b) +
+                  ", \"brightness\": " +
+                  String(brightness) +
+                  ", \"mode\": \"" +
+                  mode +
+                  "\"}";
 
   server.printP(status);
 }
@@ -163,7 +198,7 @@ void statusCommand(WebServer &server, WebServer::ConnectionType type, char *, bo
 void setup()
 {
   strip.begin();
-  strip.setBrightness(64);
+  strip.setBrightness(brightness);
   rainbow_timer.start();
 
   waitFor(WiFi.ready, 10000);

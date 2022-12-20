@@ -37,4 +37,4 @@ The [source for the web interface](https://github.com/tctree333/tools/blob/main/
 
 ## Future Improvements
 
-More lighting effects would be nice, since I only have a couple programmed in right now. I also think it would be really cool to have an alarm feature where it turns on the lights in the morning when it's dark to wake me up. Finally, I'd like the web interface to be aware of the state of the lights, but since everything's on the local network I suppose you could just like, look at the lights.
+More lighting effects would be nice, since I only have a couple programmed in right now. I also think it would be really cool to have an alarm feature where it turns on the lights in the morning when it's dark to wake me up.
