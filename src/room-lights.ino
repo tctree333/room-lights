@@ -109,13 +109,15 @@ void setLights(String data)
 
     rainbow_timer.stop();
     random_around_timer.stop();
+
+    for (uint16_t i = 0; i < strip.numPixels(); i++)
+    {
+      strip.setPixelColor(i, random(255), random(255), random(255));
+    }
+    strip.show();
+
     if (!random_timer.isActive())
     {
-      for (uint16_t i = 0; i < strip.numPixels(); i++)
-      {
-        strip.setPixelColor(i, random(255), random(255), random(255));
-      }
-      strip.show();
       random_timer.start();
     }
   }
@@ -125,13 +127,15 @@ void setLights(String data)
 
     rainbow_timer.stop();
     random_timer.stop();
+
+    for (uint16_t i = 0; i < strip.numPixels(); i++)
+    {
+      strip.setPixelColor(i, g ^ random(64), r ^ random(64), b ^ random(64));
+    }
+    strip.show();
+
     if (!random_around_timer.isActive())
     {
-      for (uint16_t i = 0; i < strip.numPixels(); i++)
-      {
-        strip.setPixelColor(i, g ^ random(64), r ^ random(64), b ^ random(64));
-      }
-      strip.show();
       random_around_timer.start();
     }
   }
