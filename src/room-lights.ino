@@ -1,7 +1,6 @@
 #include "Particle.h"
 #include "neopixel.h"
 #include "WebDuino.h"
-#include "math.h"
 
 SYSTEM_THREAD(ENABLED)
 
@@ -18,6 +17,38 @@ WebServer webserver("", 80);
 
 uint8_t r = 0, g = 255, b = 255, brightness = 64;
 String mode = "rainbow";
+
+uint8_t breatheJ = 0;
+bool breatheInc = false;
+Timer breathe_timer(10, breathe);
+void breathe()
+{
+  double factor = (breatheJ + 16.0) / (255.0 + 16.0);
+
+  for (uint8_t i = 0; i < strip.numPixels(); i++)
+  {
+    strip.setPixelColor(i, g * factor, r * factor, b * factor);
+  }
+  strip.show();
+
+  if (breatheJ == 255)
+  {
+    breatheInc = false;
+  }
+  else if (breatheJ == 0)
+  {
+    breatheInc = true;
+  }
+
+  if (breatheInc)
+  {
+    breatheJ++;
+  }
+  else
+  {
+    breatheJ--;
+  }
+}
 
 uint8_t rainbowJ = 255;
 Timer rainbow_timer(300, rainbow);
@@ -41,12 +72,15 @@ void random_lights()
   random_timer.changePeriod(random(800) + 200);
 }
 
-Timer random_around_timer(300, random_around);
+Timer random_around_timer(900, random_around);
 void random_around()
 {
-  strip.setPixelColor(random(strip.numPixels() - 1), g ^ random(64), r ^ random(64), b ^ random(64));
+  for (uint16_t i = 0; i < strip.numPixels(); i++)
+  {
+    strip.setPixelColor(i, g ^ random(64), r ^ random(64), b ^ random(64));
+  }
   strip.show();
-  random_around_timer.changePeriod(random(500) + 200);
+  random_around_timer.changePeriod(random(500) + 800);
 }
 
 void color(uint8_t r, uint8_t g, uint8_t b)
@@ -54,6 +88,7 @@ void color(uint8_t r, uint8_t g, uint8_t b)
   rainbow_timer.stop();
   random_timer.stop();
   random_around_timer.stop();
+  breathe_timer.stop();
 
   for (uint16_t i = 0; i < strip.numPixels(); i++)
   {
@@ -98,6 +133,7 @@ void setLights(String data)
 
     random_timer.stop();
     random_around_timer.stop();
+    breathe_timer.stop();
     if (!rainbow_timer.isActive())
     {
       rainbow_timer.start();
@@ -109,6 +145,7 @@ void setLights(String data)
 
     rainbow_timer.stop();
     random_around_timer.stop();
+    breathe_timer.stop();
 
     for (uint16_t i = 0; i < strip.numPixels(); i++)
     {
@@ -127,16 +164,22 @@ void setLights(String data)
 
     rainbow_timer.stop();
     random_timer.stop();
-
-    for (uint16_t i = 0; i < strip.numPixels(); i++)
-    {
-      strip.setPixelColor(i, g ^ random(64), r ^ random(64), b ^ random(64));
-    }
-    strip.show();
-
+    breathe_timer.stop();
     if (!random_around_timer.isActive())
     {
       random_around_timer.start();
+    }
+  }
+  else if (data == "breathe")
+  {
+    mode = "breathe";
+
+    rainbow_timer.stop();
+    random_timer.stop();
+    random_around_timer.stop();
+    if (!breathe_timer.isActive())
+    {
+      breathe_timer.start();
     }
   }
   else if (data == "manual")
